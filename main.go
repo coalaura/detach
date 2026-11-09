@@ -1,4 +1,4 @@
-//go:build windows
+//go:build linux || windows
 
 package main
 
@@ -6,12 +6,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"syscall"
-)
-
-const (
-	createBreakawayFromJob = 0x01000000
-	createNoWindow         = 0x08000000
 )
 
 var version = "dev"
@@ -34,24 +28,22 @@ func run() error {
 
 	defer logFile.Close()
 
-	nullInput, err := os.Open(os.DevNull)
+	nullFile, err := os.OpenFile(os.DevNull, os.O_RDWR, 0)
 	if err != nil {
-		return fmt.Errorf("open null input: %w", err)
+		return fmt.Errorf("open null device: %w", err)
 	}
 
-	defer nullInput.Close()
+	defer nullFile.Close()
 
 	cmd := exec.Command(os.Args[1], os.Args[2:]...)
 
-	cmd.Stdin = nullInput
-	cmd.Stdout = nullInput
+	cmd.Stdin = nullFile
+	cmd.Stdout = logFile
 	cmd.Stderr = logFile
+	cmd.SysProcAttr = processAttributes()
 
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		CreationFlags: createBreakawayFromJob | createNoWindow,
-	}
-
-	if err := cmd.Start(); err != nil {
+	err = cmd.Start()
+	if err != nil {
 		return fmt.Errorf("start process: %w (log: %s)", err, logFile.Name())
 	}
 
